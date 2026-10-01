@@ -1,6 +1,8 @@
 # Análise técnica — Histórico de preços Amazon Brasil (uso pessoal)
 
 > Status: **proposta para aprovação**. Nenhum código foi escrito ainda.
+> Revisão 01/10/2026: decisões do usuário incorporadas na **seção 12**, que prevalece
+> sobre as seções anteriores onde houver diferença.
 > Data da análise: 01/10/2026.
 
 O objetivo do sistema é responder, com dados observados:
@@ -869,6 +871,92 @@ Cada etapa termina com algo funcionando e testado.
 6. **Onde vai rodar** (máquina local, servidor doméstico, VPS)? Afeta acesso e backup.
 7. **CEP de referência** para frete (se for registrar frete).
 8. **Canal de notificação** preferido para depois do MVP.
+
+---
+
+## 12. Decisões tomadas e ajustes resultantes (01/10/2026)
+
+| # | Decisão | Consequência |
+|---|---|---|
+| 1 | Sem conta de Associados | Creators API fora do MVP. A interface `PriceProvider` continua permitindo adicioná-la no futuro. |
+| 2 | (pergunta sobre implicações) | Irrelevante enquanto a Creators API não for usada; ver 12.1. |
+| 3 | Automação de navegador descartada | `AmazonBrowserProvider` **não** será implementado. |
+| 4 | Captura assistida como fonte principal | `ManualPriceProvider` + captura por bookmarklet (ou extensão pessoal). |
+| 5 | Sem Keepa | Sem importação de terceiros. Todo o histórico é próprio. |
+| 6 | Roda na máquina local | Docker Compose local; acesso só por `localhost`. |
+| 7 | Sem CEP definido | Frete registrado como "o que a página mostrou", opcional, em série separada. |
+| 8 | Notificação por e-mail | SMTP (pós-MVP), configurado por variáveis de ambiente. |
+
+### 12.1 Implicação do conflito de termos (Creators API)
+
+O conflito era contratual, entre o usuário e a Amazon pelo Acordo Operacional do
+Programa de Associados. A consequência prática possível seria a suspensão das
+credenciais da API ou da conta de Associado (e de comissões). Não há API em uso, então
+o conflito **não se aplica** a esta versão. Volta a ser relevante apenas se um dia a
+Creators API for adicionada.
+
+### 12.2 Efeitos de uma coleta 100% assistida
+
+Sem coleta automática, várias partes ficam mais simples e algumas regras mudam:
+
+- **Sem worker no MVP.** Não há o que agendar. O compose fica com `db`, `web` e `backup`.
+  O processamento (eventos → snapshot → alertas) roda de forma síncrona logo após cada
+  captura. `collection_runs` é mantida, mas registra **sessões de captura** (cada envio
+  manual ou do bookmarklet), não execuções do agendador.
+- **Amostragem irregular e esparsa é o caso normal.** As métricas ponderadas pelo tempo
+  (seção 5.1) passam a ser essenciais. O teto de validade de cada observação deixa de ser
+  "2× o intervalo de coleta" e passa a ser **configurável, padrão 7 dias**. Depois disso,
+  o período conta como "sem dados".
+- **Limiares de suficiência** (percentil, janelas) continuam os mesmos e serão mais
+  frequentemente "dados insuficientes" no início. O sistema dirá isso explicitamente.
+- **Nova página `/capturar` (fila de captura).** Lista os produtos ordenados por tempo
+  desde a última captura, com link que abre a página do produto na Amazon em nova aba.
+  Você abre, olha, e clica no bookmarklet. Nada é acessado automaticamente pelo sistema.
+  Cada produto tem um "intervalo desejado" (padrão: 2 dias) só para ordenar essa fila.
+- **Alertas**: são avaliados no momento da captura. Como você estará olhando a página
+  nesse momento, o alerta aparece na própria tela de confirmação. O e-mail (pós-MVP)
+  serve como registro e para capturas feitas pelo celular/outra aba.
+
+### 12.3 Desenho da captura pelo bookmarklet
+
+Fluxo escolhido por ser o mais robusto:
+
+1. Na página do produto (amazon.com.br), você clica no favorito "Registrar preço".
+2. O script lê da página já carregada: ASIN, título, preço do item, "preço de",
+   vendedor, condição, disponibilidade, frete e cupom visíveis.
+3. Em vez de enviar os dados em segundo plano (o que pode ser bloqueado pela política de
+   segurança de conteúdo do site ou por regras do navegador para `localhost`), ele **abre
+   uma aba** em `http://localhost:3000/capture?...` com os dados na URL.
+4. A aplicação mostra um formulário pré-preenchido. Você confere, corrige se preciso e
+   confirma. Só então a observação é gravada (`source = bookmarklet`).
+5. A tela de confirmação já mostra a comparação com o histórico e os alertas disparados.
+
+Se algum campo não for encontrado (HTML mudou), o formulário abre com o que foi possível
+e você completa. Se algum navegador bloquear bookmarklets nessa página, a alternativa é
+uma extensão mínima instalada localmente (modo desenvolvedor), com o mesmo comportamento.
+Isso será validado na Etapa 2.
+
+Observação sobre os termos: o script não faz requisições à Amazon nem navega sozinho;
+apenas lê a página que você abriu no seu navegador, por ação sua, e a envia ao seu
+computador. É, na prática, uma cópia assistida do que você já está vendo.
+
+### 12.4 Plano de implementação revisado
+
+- **Etapa 0 — Fundação**: Next.js + TS + Tailwind; compose (`db`, `web`, `backup`);
+  schema Prisma; trigger de imutabilidade; view `effective_observations`; CI.
+- **Etapa 1 — Núcleo de análise**: funções puras e testes (inclui o teto de 7 dias).
+- **Etapa 2 — Produtos e captura**: cadastro por URL/ASIN; `MockPriceProvider` com séries
+  sintéticas para desenvolvimento; formulário manual; bookmarklet + `/capture`;
+  página `/capturar`.
+- **Etapa 3 — Processamento**: eventos, snapshot, validação/`suspect`, correções
+  administrativas, registro de sessões de captura.
+- **Etapa 4 — Interface de análise**: lista e página do produto (seção 6).
+- **Etapa 5 — Alertas**: os cinco tipos da seção 5.9, exibidos na interface.
+
+→ **Fim do MVP.**
+
+- **Pós-MVP**: e-mail via SMTP; promoções e recuperação; faixas completas; comparação com
+  "preço de"; exportação CSV/JSON; série de preço total; verificação de restauração do backup.
 
 ---
 
