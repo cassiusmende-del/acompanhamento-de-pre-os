@@ -51,11 +51,6 @@ export default async function SettingsPage() {
           </li>
           <li>Use “Testar conexão” nas opções da extensão.</li>
         </ol>
-        <p className="mt-3 text-sm text-muted">
-          No Firefox: <code>about:debugging</code> → Este Firefox → Carregar extensão temporária →
-          arquivo <code>extension/manifest.json</code>. Extensões temporárias são removidas ao
-          fechar o Firefox.
-        </p>
 
         <form action={regenerateTokenAction} className="mt-4">
           <button type="submit" className={secondaryButtonClass}>

@@ -6,8 +6,7 @@
   "permissions": ["storage"],
   "host_permissions": ["https://www.amazon.com.br/*", "http://localhost/*", "http://127.0.0.1/*"],
   "background": {
-    "service_worker": "background.js",
-    "scripts": ["background.js"]
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
@@ -23,11 +22,5 @@
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
-  },
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "historico-precos@local",
-      "strict_min_version": "121.0"
-    }
   }
 }

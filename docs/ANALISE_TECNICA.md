@@ -986,7 +986,7 @@ Ajustes feitos durante a implementação, que prevalecem sobre os esboços anter
 
 ## 14. Notas de implementação (Etapa 2)
 
-- **Captura pela extensão** (pasta `extension/`, Manifest V3, Chrome/Edge/Brave e Firefox 121+):
+- **Captura pela extensão** (pasta `extension/`, Manifest V3, Chrome/Edge/Brave; Firefox exigiria um manifesto separado):
   - `extract.js` lê a página já carregada (preço da Buy Box, preço "de", disponibilidade,
     vendedor, frete, cupom). Cada campo tem vários seletores em ordem de preferência e o
     resultado registra qual foi usado (`diagnostics`, guardado em `raw_payload`).
