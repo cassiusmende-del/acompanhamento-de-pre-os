@@ -1,6 +1,8 @@
-import { computeProductAnalytics, type ProductAnalytics } from "@/analytics";
+import { applyCorrections, type ProductAnalytics } from "@/analytics";
 import { DEFAULT_MARKETPLACE, productUrl } from "@/domain/asin";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
+import { loadProductHistory, processProduct } from "@/processing/process";
+import { assessSuspect } from "@/processing/suspect";
 import { captureFeedback } from "./feedback";
 import { computeTotalCents } from "./total";
 
@@ -81,7 +83,13 @@ export interface RecordObservationInput {
 }
 
 export type RecordObservationResult =
-  | { status: "recorded"; observationId: string; feedback: string[]; analytics: ProductAnalytics }
+  | {
+      status: "recorded";
+      observationId: string;
+      feedback: string[];
+      analytics: ProductAnalytics;
+      suspect: boolean;
+    }
   | { status: "duplicate"; observationId: string; minutesAgo: number }
   | { status: "product_not_found" };
 
@@ -124,6 +132,13 @@ export async function recordObservation(
   }
 
   const priceCents = input.status === "OK" ? input.priceCents : null;
+  const history = await loadProductHistory(db, product.id);
+  const assessment = assessSuspect(
+    priceCents,
+    applyCorrections(history.observations, history.corrections),
+    input.observedAt,
+  );
+
   const observation = await db.$transaction(async (tx) => {
     const run = await tx.collectionRun.create({
       data: {
@@ -158,6 +173,8 @@ export async function recordObservation(
         condition: input.condition ?? "UNKNOWN",
         availability: input.availability ?? null,
         source: input.source,
+        suspect: assessment.suspect,
+        suspectReason: assessment.suspect ? assessment.reason : null,
         collectionRunId: run.id,
         rawPayload:
           input.rawPayload === undefined
@@ -172,72 +189,58 @@ export async function recordObservation(
     return created;
   });
 
-  const analytics = await loadProductAnalytics(db, product.id, now);
+  const analytics = await processProduct(db, product.id, now);
+  const feedback = captureFeedback(analytics, now);
+  if (assessment.suspect) {
+    feedback.push("Valor muito diferente do histórico recente: marcado para revisão na aplicação.");
+  }
   return {
     status: "recorded",
     observationId: observation.id,
-    feedback: captureFeedback(analytics, now),
+    feedback,
     analytics,
+    suspect: assessment.suspect,
   };
 }
 
-/** Exclui uma observação da análise criando uma correção (o registro original permanece). */
+export type CorrectionKind = "EXCLUDE" | "RESTORE" | "CONFIRM";
+
+const DEFAULT_REASONS: Record<CorrectionKind, string> = {
+  EXCLUDE: "Excluída pelo usuário",
+  RESTORE: "Restaurada pelo usuário",
+  CONFIRM: "Valor conferido pelo usuário",
+};
+
+/**
+ * Registra uma correção (o registro original nunca muda) e reprocessa o produto.
+ * EXCLUDE tira da análise; RESTORE desfaz correções; CONFIRM marca um suspeito como conferido.
+ */
+export async function correctObservation(
+  db: Db,
+  observationId: string,
+  action: CorrectionKind,
+  reason?: string,
+): Promise<"done" | "not_found"> {
+  const observation = await db.priceObservation.findUnique({
+    where: { id: observationId },
+    select: { id: true, productId: true },
+  });
+  if (!observation) return "not_found";
+  await db.observationCorrection.create({
+    data: { observationId, action, reason: reason?.trim() || DEFAULT_REASONS[action] },
+  });
+  await processProduct(db, observation.productId);
+  return "done";
+}
+
 export async function excludeObservation(
   db: Db,
   observationId: string,
   reason: string,
 ): Promise<"excluded" | "not_found"> {
-  const observation = await db.priceObservation.findUnique({
-    where: { id: observationId },
-    select: { id: true },
-  });
-  if (!observation) return "not_found";
-  await db.observationCorrection.create({
-    data: { observationId, action: "EXCLUDE", reason: reason.trim() || "Excluída pelo usuário" },
-  });
-  return "excluded";
+  return (await correctObservation(db, observationId, "EXCLUDE", reason)) === "done"
+    ? "excluded"
+    : "not_found";
 }
 
-/** Desfaz correções anteriores: a observação volta ao valor original na análise. */
-export async function restoreObservation(
-  db: Db,
-  observationId: string,
-  reason: string,
-): Promise<"restored" | "not_found"> {
-  const observation = await db.priceObservation.findUnique({
-    where: { id: observationId },
-    select: { id: true },
-  });
-  if (!observation) return "not_found";
-  await db.observationCorrection.create({
-    data: { observationId, action: "RESTORE", reason: reason.trim() || "Restaurada pelo usuário" },
-  });
-  return "restored";
-}
-
-/** Carrega observações e correções do produto e calcula as métricas. */
-export async function loadProductAnalytics(
-  db: Db,
-  productId: string,
-  now: Date = new Date(),
-): Promise<ProductAnalytics> {
-  const observations = await db.priceObservation.findMany({
-    where: { productId },
-    orderBy: { observedAt: "asc" },
-    select: {
-      id: true,
-      observedAt: true,
-      status: true,
-      priceCents: true,
-      sellerId: true,
-      sellerName: true,
-      listPriceCents: true,
-      source: true,
-    },
-  });
-  const corrections = await db.observationCorrection.findMany({
-    where: { observation: { productId } },
-    select: { observationId: true, action: true, newPriceCents: true, createdAt: true },
-  });
-  return computeProductAnalytics({ observations, corrections, now });
-}
+export { loadProductAnalytics } from "@/processing/process";

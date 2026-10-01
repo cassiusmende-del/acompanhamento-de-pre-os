@@ -23,3 +23,4 @@ Aplicação pessoal de histórico de preços (Amazon Brasil). Leia `docs/ANALISE
 - Extensão em `extension/` (JS puro, sem build). `extract.js` é testado em
   `tests/extension/`; se a extensão não ler o preço, nada é gravado.
 - Páginas que leem o banco usam `export const dynamic = "force-dynamic"` (sem Cache Components).
+- Após gravar observação ou correção, chame `processProduct` (eventos e retrato são derivados).

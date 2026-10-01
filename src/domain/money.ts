@@ -62,3 +62,18 @@ export function formatSignedPercent(value: number, digits = 1): string {
   const text = formatPercent(value, digits);
   return value > 0 && Number(Math.abs(value).toFixed(digits)) !== 0 ? `+${text}` : text;
 }
+
+/**
+ * Porcentagem arredondada sem sugerir extremos que não ocorreram: 0,3 → "<1%",
+ * 99,7 → ">99%" (0% e 100% só quando exatos).
+ */
+export function formatShare(value: number): string {
+  return `${formatPercentileLabel(value)}%`;
+}
+
+/** Número do percentil com a mesma regra: "<1", "18", ">99". */
+export function formatPercentileLabel(value: number): string {
+  if (value > 0 && value < 0.5) return "<1";
+  if (value < 100 && value >= 99.5) return ">99";
+  return formatDecimal(value, 0);
+}

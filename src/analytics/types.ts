@@ -10,9 +10,12 @@ export interface ObservationInput {
   sellerName?: string | null;
   listPriceCents?: number | null;
   source?: string;
+  /** Marcada na gravação por destoar do histórico recente. */
+  suspect?: boolean;
 }
 
-export type CorrectionAction = "EXCLUDE" | "REPLACE_PRICE" | "RESTORE";
+/** CONFIRM = valor revisado e mantido como foi lido (efeito igual a RESTORE). */
+export type CorrectionAction = "EXCLUDE" | "REPLACE_PRICE" | "RESTORE" | "CONFIRM";
 
 export interface CorrectionInput {
   observationId: string;
@@ -25,6 +28,8 @@ export interface CorrectionInput {
 export interface EffectiveObservation extends ObservationInput {
   corrected: boolean;
   originalPriceCents: number | null;
+  /** Já passou por alguma correção ou revisão (para saber se um suspeito foi revisado). */
+  reviewed: boolean;
 }
 
 /** Observação com preço válido. */

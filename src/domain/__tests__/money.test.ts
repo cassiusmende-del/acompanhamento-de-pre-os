@@ -40,6 +40,16 @@ describe("formatação", () => {
     expect(formatSignedPercent(-0.01)).toBe("0,0%");
   });
 
+  it("porcentagens não sugerem extremos que não ocorreram", async () => {
+    const { formatShare, formatPercentileLabel } = await import("../money");
+    expect(formatShare(0.31)).toBe("<1%");
+    expect(formatShare(0)).toBe("0%");
+    expect(formatShare(18.4)).toBe("18%");
+    expect(formatShare(99.7)).toBe(">99%");
+    expect(formatShare(100)).toBe("100%");
+    expect(formatPercentileLabel(0.6)).toBe("1");
+  });
+
   it("reproduz os números do exemplo do enunciado", () => {
     // Atual 649,90; média 721,40; menor 579,90.
     expect(formatSignedPercent(percentChange(64990, 72140)!)).toBe("-9,9%");

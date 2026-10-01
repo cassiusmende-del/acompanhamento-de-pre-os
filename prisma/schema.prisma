@@ -43,10 +43,13 @@ enum AlertType {
   BELOW_AVERAGE
 }
 
+/// RESTORE desfaz correções anteriores; CONFIRM registra que um valor suspeito foi
+/// conferido e mantido (para a análise, ambos usam o valor original).
 enum CorrectionAction {
   EXCLUDE
   REPLACE_PRICE
   RESTORE
+  CONFIRM
 }
 
 enum RunStatus {

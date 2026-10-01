@@ -1,24 +1,25 @@
 import Link from "next/link";
 import { DateTime, Money } from "@/components/format";
+import { formatPercentileLabel, formatSignedPercent } from "@/domain/money";
 import { getDb } from "@/lib/db";
+import { ensureSnapshots } from "@/processing/process";
+import type { SnapshotData } from "@/processing/snapshot";
 
 export const dynamic = "force-dynamic";
 
+function Change({ percent }: { percent: number | null | undefined }) {
+  if (percent === null || percent === undefined) return <span className="text-muted">—</span>;
+  const rounded = Math.round(percent * 10) / 10;
+  const tone = rounded < 0 ? "text-down" : rounded > 0 ? "text-up" : "";
+  return <span className={`tabular-nums ${tone}`}>{formatSignedPercent(percent)}</span>;
+}
+
 export default async function ProductsPage() {
-  const products = await getDb().product.findMany({
+  const db = getDb();
+  await ensureSnapshots(db);
+  const products = await db.product.findMany({
     orderBy: [{ active: "desc" }, { title: "asc" }],
-    select: {
-      id: true,
-      title: true,
-      asin: true,
-      active: true,
-      _count: { select: { observations: true } },
-      observations: {
-        orderBy: { observedAt: "desc" },
-        take: 1,
-        select: { observedAt: true, status: true, priceCents: true },
-      },
-    },
+    select: { id: true, title: true, asin: true, active: true, snapshot: true },
   });
 
   return (
@@ -44,41 +45,89 @@ export default async function ProductsPage() {
             <thead>
               <tr className="border-b border-rule text-left text-muted">
                 <th className="py-2 pr-4 font-normal">Produto</th>
-                <th className="py-2 pr-4 font-normal">Último registro</th>
-                <th className="py-2 pr-4 text-right font-normal">Preço</th>
-                <th className="py-2 text-right font-normal">Observações</th>
+                <th className="py-2 pr-4 text-right font-normal">Atual</th>
+                <th
+                  className="py-2 pr-4 text-right font-normal"
+                  title="Variação desde a observação anterior"
+                >
+                  vs. anterior
+                </th>
+                <th className="py-2 pr-4 text-right font-normal">Menor</th>
+                <th className="py-2 pr-4 text-right font-normal">Mediana</th>
+                <th
+                  className="py-2 pr-4 text-right font-normal"
+                  title="Preço atual em relação à mediana"
+                >
+                  vs. mediana
+                </th>
+                <th
+                  className="py-2 pr-4 text-right font-normal"
+                  title="Porcentagem das observações com preço igual ou menor que o atual"
+                >
+                  Percentil
+                </th>
+                <th className="py-2 font-normal">Último registro</th>
               </tr>
             </thead>
             <tbody>
               {products.map((p) => {
-                const last = p.observations[0];
+                const s = p.snapshot;
+                const d = s?.data as SnapshotData | undefined;
                 return (
-                  <tr key={p.id} className="border-b border-rule">
+                  <tr key={p.id} className={`border-b border-rule ${p.active ? "" : "text-muted"}`}>
                     <td className="py-2 pr-4">
                       <Link href={`/produtos/${p.id}`} className="hover:underline">
                         {p.title}
                       </Link>
-                      <span className="ml-2 text-xs text-muted">{p.asin}</span>
-                      {!p.active && <span className="ml-2 text-xs text-muted">(pausado)</span>}
-                    </td>
-                    <td className="py-2 pr-4 text-muted">
-                      <DateTime date={last?.observedAt} />
-                    </td>
-                    <td className="py-2 pr-4 text-right">
-                      {last && last.status !== "OK" ? (
-                        <span className="text-muted">indisponível</span>
-                      ) : (
-                        <Money cents={last?.priceCents} />
+                      {!p.active && <span className="ml-2 text-xs">(pausado)</span>}
+                      {d && d.pendingSuspect > 0 && (
+                        <span className="ml-2 text-xs text-up">{d.pendingSuspect} a revisar</span>
                       )}
                     </td>
-                    <td className="py-2 text-right tabular-nums">{p._count.observations}</td>
+                    <td className="py-2 pr-4 text-right whitespace-nowrap">
+                      {s && s.currentPriceCents === null && d?.unavailableSince ? (
+                        <span className="text-muted">indisponível</span>
+                      ) : (
+                        <Money cents={s?.currentPriceCents} />
+                      )}
+                    </td>
+                    <td className="py-2 pr-4 text-right">
+                      <Change percent={d?.changeFromPreviousPercent} />
+                    </td>
+                    <td className="py-2 pr-4 text-right whitespace-nowrap">
+                      <Money cents={s?.lowestPriceCents} />
+                    </td>
+                    <td className="py-2 pr-4 text-right whitespace-nowrap">
+                      <Money cents={s?.medianPriceCents} />
+                    </td>
+                    <td className="py-2 pr-4 text-right">
+                      <Change percent={d?.changeFromMedianPercent} />
+                    </td>
+                    <td className="py-2 pr-4 text-right tabular-nums">
+                      {s?.percentile !== null && s?.percentile !== undefined ? (
+                        formatPercentileLabel(Number(s.percentile))
+                      ) : (
+                        <span
+                          className="text-muted"
+                          title="Dados insuficientes (mínimo de 20 observações em 14 dias)"
+                        >
+                          —
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 whitespace-nowrap text-muted">
+                      <DateTime date={s?.lastObservedAt} />
+                      {s && <span className="ml-1 text-xs">({s.pricedCount})</span>}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
           <p className="mt-3 text-xs text-muted">
-            Comparações com o histórico (média, mínimos, percentil) chegam com as telas de análise.
+            Percentil: porcentagem das observações com preço igual ou menor que o atual; aparece com
+            pelo menos 20 observações em 14 dias. Entre parênteses, a quantidade de observações com
+            preço.
           </p>
         </div>
       )}

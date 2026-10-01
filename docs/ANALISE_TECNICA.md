@@ -1010,6 +1010,27 @@ Ajustes feitos durante a implementação, que prevalecem sobre os esboços anter
 
 ---
 
+## 15. Notas de implementação (Etapa 3)
+
+- **Processamento único** (`src/processing/process.ts`): após cada observação nova e após cada
+  correção, os eventos do produto são recalculados a partir das observações efetivas
+  (apaga e regrava `price_events`) e o retrato em `product_snapshots` é atualizado. Como tudo
+  é derivado, o resultado é sempre consistente com o histórico e as correções.
+- **Valor suspeito** (`src/processing/suspect.ts`): preço que difere mais de 60% da mediana dos
+  últimos 30 dias (com ao menos 3 observações efetivas) é gravado com `suspect = true` e o motivo.
+  Ele **entra nos cálculos** até ser revisado; a interface avisa enquanto houver pendências.
+  Revisão: "Confirmar valor" (nova ação de correção `CONFIRM`) ou "Excluir da análise".
+- **Lista de produtos** lê os retratos: atual, variação desde a anterior, menor, mediana,
+  variação em relação à mediana e percentil. Produtos sem retrato são processados ao abrir a
+  lista (atualização transparente de dados das etapas anteriores).
+- **Página Registros** (`/registros`): últimos 100 registros de todos os produtos, com filtro de
+  suspeitos pendentes.
+- **Porcentagens extremas**: valores entre 0 e 0,5% aparecem como "<1%" e entre 99,5% e 100% como
+  ">99%", para não sugerir "nenhum" ou "todos" quando não é o caso.
+- `npm run db:reprocess` recalcula eventos e retratos de todos os produtos (desenvolvimento).
+
+---
+
 ## Fontes consultadas
 
 - Amazon — deprecação da PA-API 5.0 e migração para Creators API:

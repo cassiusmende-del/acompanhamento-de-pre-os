@@ -3,12 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { parseManualObservationForm, parseProductForm, parseTargetInterval } from "@/capture/forms";
-import {
-  createProduct,
-  excludeObservation,
-  recordObservation,
-  restoreObservation,
-} from "@/capture/service";
+import { correctObservation, createProduct, recordObservation } from "@/capture/service";
 import { getDb } from "@/lib/db";
 import { regenerateExtensionToken } from "@/lib/settings";
 
@@ -104,19 +99,29 @@ export async function recordManualObservationAction(
   };
 }
 
-export async function excludeObservationAction(form: FormData): Promise<void> {
+async function correctionAction(
+  form: FormData,
+  action: "EXCLUDE" | "RESTORE" | "CONFIRM",
+): Promise<void> {
   const observationId = String(form.get("observationId") ?? "");
   const productId = String(form.get("productId") ?? "");
-  const reason = String(form.get("reason") ?? "").trim() || "Excluída pelo usuário";
-  await excludeObservation(getDb(), observationId, reason);
+  const reason = String(form.get("reason") ?? "").trim() || undefined;
+  await correctObservation(getDb(), observationId, action, reason);
   revalidatePath(`/produtos/${productId}`);
+  revalidatePath("/");
+  revalidatePath("/registros");
+}
+
+export async function excludeObservationAction(form: FormData): Promise<void> {
+  await correctionAction(form, "EXCLUDE");
 }
 
 export async function restoreObservationAction(form: FormData): Promise<void> {
-  const observationId = String(form.get("observationId") ?? "");
-  const productId = String(form.get("productId") ?? "");
-  await restoreObservation(getDb(), observationId, "Restaurada pelo usuário");
-  revalidatePath(`/produtos/${productId}`);
+  await correctionAction(form, "RESTORE");
+}
+
+export async function confirmObservationAction(form: FormData): Promise<void> {
+  await correctionAction(form, "CONFIRM");
 }
 
 export async function regenerateTokenAction(): Promise<void> {

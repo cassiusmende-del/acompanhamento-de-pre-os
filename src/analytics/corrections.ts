@@ -2,7 +2,7 @@ import type { CorrectionInput, EffectiveObservation, ObservationInput } from "./
 
 /**
  * Aplica correções administrativas: para cada observação vale a correção mais recente.
- * EXCLUDE remove da análise; REPLACE_PRICE substitui o preço; RESTORE volta ao original.
+ * EXCLUDE remove da análise; REPLACE_PRICE substitui o preço; RESTORE e CONFIRM mantêm o original.
  * Devolve as observações efetivas em ordem cronológica.
  */
 export function applyCorrections(
@@ -28,10 +28,16 @@ export function applyCorrections(
         priceCents: correction.newPriceCents,
         corrected: true,
         originalPriceCents: o.priceCents,
+        reviewed: true,
       });
       continue;
     }
-    result.push({ ...o, corrected: false, originalPriceCents: o.priceCents });
+    result.push({
+      ...o,
+      corrected: false,
+      originalPriceCents: o.priceCents,
+      reviewed: correction !== undefined,
+    });
   }
   return sortChronologically(result);
 }

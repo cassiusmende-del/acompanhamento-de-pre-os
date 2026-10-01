@@ -1,5 +1,11 @@
 import { formatDate, formatDaysAgo, formatDurationDays } from "@/domain/dates";
-import { formatBRL, formatDecimal, formatPercent } from "@/domain/money";
+import {
+  formatBRL,
+  formatDecimal,
+  formatPercent,
+  formatPercentileLabel,
+  formatShare,
+} from "@/domain/money";
 import type { ProductAnalytics } from "./summary";
 
 /**
@@ -16,7 +22,15 @@ function pct(value: number): string {
 }
 
 function sharePct(value: number): string {
-  return formatPercent(value, 0);
+  return formatShare(value);
+}
+
+/** "cerca de 18%", "menos de 1%", "mais de 99%". */
+function approxShare(value: number): string {
+  const share = formatShare(value);
+  if (share.startsWith("<")) return "menos de 1%";
+  if (share.startsWith(">")) return "mais de 99%";
+  return `cerca de ${share}`;
 }
 
 export function describe(a: ProductAnalytics, now: Date = a.computedAt): Sentence[] {
@@ -140,7 +154,7 @@ export function describe(a: ProductAnalytics, now: Date = a.computedAt): Sentenc
         : "";
     add(
       "percentile",
-      `Percentil ${formatDecimal(p.byObservation, 0)}: cerca de ${sharePct(p.byObservation)} das observações tiveram preço igual ou inferior ao atual.${time}`,
+      `Percentil ${formatPercentileLabel(p.byObservation)}: ${approxShare(p.byObservation)} das observações tiveram preço igual ou inferior ao atual.${time}`,
     );
   } else if (p.status === "insufficient") {
     add(

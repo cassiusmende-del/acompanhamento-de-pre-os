@@ -18,7 +18,7 @@ A análise técnica completa, com as decisões tomadas, está em
 | 0     | Base: Next.js, PostgreSQL, Prisma, Docker, CI, histórico imutável | concluída |
 | 1     | Núcleo de análise (funções puras e testes)                        | concluída |
 | 2     | Produtos e captura (formulário, extensão, fila de captura)        | concluída |
-| 3     | Processamento (eventos, snapshot, correções)                      | pendente  |
+| 3     | Processamento (eventos, snapshot, correções)                      | concluída |
 | 4     | Telas de análise                                                  | pendente  |
 | 5     | Alertas                                                           | pendente  |
 
@@ -60,13 +60,15 @@ npm run db:deploy         # aplica as migrations
 npm run dev
 ```
 
-| Comando              | O que faz                                                  |
-| -------------------- | ---------------------------------------------------------- |
-| `npm test`           | Testes unitários (análise e domínio)                       |
-| `npm run test:db`    | Testes de integração do banco; exige `TEST_DATABASE_URL`   |
-| `npm run typecheck`  | Verificação de tipos                                       |
-| `npm run lint`       | ESLint                                                     |
-| `npm run db:migrate` | Cria uma nova migration a partir do `prisma/schema.prisma` |
+| Comando                | O que faz                                                           |
+| ---------------------- | ------------------------------------------------------------------- |
+| `npm test`             | Testes unitários (análise e domínio)                                |
+| `npm run test:db`      | Testes de integração do banco; exige `TEST_DATABASE_URL`            |
+| `npm run typecheck`    | Verificação de tipos                                                |
+| `npm run lint`         | ESLint                                                              |
+| `npm run db:migrate`   | Cria uma nova migration a partir do `prisma/schema.prisma`          |
+| `npm run db:reprocess` | Recalcula eventos e retratos de todos os produtos                   |
+| `npm run db:seed-demo` | Gera produtos e histórico simulados (só em bancos `*_dev`/`*_test`) |
 
 ## Backup e restauração
 
@@ -98,6 +100,7 @@ src/analytics/     métricas — funções puras, sem acesso a banco
 src/lib/           cliente do banco
 src/app/           páginas e rotas (Next.js)
 src/capture/       cadastro, captura, fila e formulários
+src/processing/    eventos de mudança, retratos e detecção de valores suspeitos
 src/providers/     contrato PriceProvider e fonte simulada
 extension/         extensão do navegador (sem etapa de build)
 tests/db/          testes de integração do banco

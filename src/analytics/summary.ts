@@ -78,6 +78,8 @@ export interface ProductAnalytics {
     unavailable: number;
     excluded: number;
     corrected: number;
+    /** Observações suspeitas ainda não revisadas — entram nos cálculos até serem revisadas. */
+    pendingSuspect: number;
   };
   firstObservedAt: Date | null;
   lastObservedAt: Date | null;
@@ -263,6 +265,7 @@ export function computeProductAnalytics(input: AnalyticsInput): ProductAnalytics
       unavailable: effective.length - priced.length,
       excluded: input.observations.length - effective.length,
       corrected: effective.filter((o) => o.corrected).length,
+      pendingSuspect: effective.filter((o) => o.suspect && !o.reviewed).length,
     },
     firstObservedAt: effective[0]?.observedAt ?? null,
     lastObservedAt: latest?.observedAt ?? null,
