@@ -17,10 +17,24 @@ A análise técnica completa, com as decisões tomadas, está em
 | ----- | ----------------------------------------------------------------- | --------- |
 | 0     | Base: Next.js, PostgreSQL, Prisma, Docker, CI, histórico imutável | concluída |
 | 1     | Núcleo de análise (funções puras e testes)                        | concluída |
-| 2     | Produtos e captura (formulário, extensão, fila de captura)        | pendente  |
+| 2     | Produtos e captura (formulário, extensão, fila de captura)        | concluída |
 | 3     | Processamento (eventos, snapshot, correções)                      | pendente  |
 | 4     | Telas de análise                                                  | pendente  |
 | 5     | Alertas                                                           | pendente  |
+
+## Extensão do navegador
+
+A pasta `extension/` contém a extensão que registra o preço da página da Amazon Brasil que
+você abrir. Ela não acessa a Amazon sozinha, não usa sua conta e não lê o carrinho.
+
+1. Chrome, Edge ou Brave: `chrome://extensions` → ative o **Modo do desenvolvedor** →
+   **Carregar sem compactação** → escolha a pasta `extension`.
+2. Nas opções da extensão, informe o endereço (`http://localhost:3000`) e o token mostrado em
+   **Configurações** na aplicação, e use **Testar conexão**.
+3. Cadastre produtos pela aplicação ou pelo botão **Monitorar este produto** no menu da extensão.
+
+Ao abrir um produto monitorado, o preço é registrado e aparece um aviso com **Desfazer**.
+Se a extensão não conseguir ler o preço, nada é gravado e o aviso leva ao registro manual.
 
 ## Rodar com Docker (uso normal)
 
@@ -83,6 +97,10 @@ src/domain/        dinheiro, ASIN e datas
 src/analytics/     métricas — funções puras, sem acesso a banco
 src/lib/           cliente do banco
 src/app/           páginas e rotas (Next.js)
+src/capture/       cadastro, captura, fila e formulários
+src/providers/     contrato PriceProvider e fonte simulada
+extension/         extensão do navegador (sem etapa de build)
 tests/db/          testes de integração do banco
+tests/extension/   testes do leitor de página da extensão
 scripts/backup.sh  rotina de backup do serviço `backup`
 ```

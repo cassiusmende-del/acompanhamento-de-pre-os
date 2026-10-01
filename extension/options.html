@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Opções — Histórico de preços</title>
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body {
+        max-width: 520px;
+        padding: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Histórico de preços — opções</h1>
+    <p class="muted">Copie o endereço e o token da página Configurações da aplicação.</p>
+    <form id="form">
+      <label for="appUrl">Endereço da aplicação</label>
+      <input id="appUrl" type="url" placeholder="http://localhost:3000" required />
+      <label for="token">Token</label>
+      <input id="token" type="password" autocomplete="off" required />
+      <label
+        ><input id="autoCapture" type="checkbox" /> Registrar automaticamente ao abrir um produto
+        monitorado</label
+      >
+      <div class="row">
+        <button type="submit">Salvar</button>
+        <button type="button" id="test">Testar conexão</button>
+      </div>
+    </form>
+    <p id="message" class="muted"></p>
+    <hr />
+    <p class="muted">
+      A extensão só lê a página da Amazon que você abriu e envia os dados para o endereço acima. Ela
+      não acessa a Amazon sozinha, não usa sua conta e não lê o carrinho.
+    </p>
+    <script src="options.js"></script>
+  </body>
+</html>

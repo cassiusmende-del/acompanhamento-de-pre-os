@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body {
+        width: 320px;
+        padding: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Histórico de preços</h1>
+    <p id="connection" class="muted">Verificando conexão…</p>
+    <div id="page"></div>
+    <div class="row" id="actions"></div>
+    <hr />
+    <div class="row">
+      <button id="openPending" type="button">Abrir pendentes</button>
+      <button id="openApp" type="button">Abrir aplicação</button>
+      <button id="options" type="button">Opções</button>
+    </div>
+    <p id="message" class="muted"></p>
+    <script src="popup.js"></script>
+  </body>
+</html>

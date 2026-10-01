@@ -984,6 +984,32 @@ Ajustes feitos durante a implementação, que prevalecem sobre os esboços anter
 
 ---
 
+## 14. Notas de implementação (Etapa 2)
+
+- **Captura pela extensão** (pasta `extension/`, Manifest V3, Chrome/Edge/Brave e Firefox 121+):
+  - `extract.js` lê a página já carregada (preço da Buy Box, preço "de", disponibilidade,
+    vendedor, frete, cupom). Cada campo tem vários seletores em ordem de preferência e o
+    resultado registra qual foi usado (`diagnostics`, guardado em `raw_payload`).
+  - Se o preço não for encontrado, **nada é gravado**: aparece um aviso com atalho para o
+    registro manual. Indisponibilidade só é registrada quando a página diz isso explicitamente.
+  - Grava automaticamente ao abrir um produto monitorado e mostra um aviso com **Desfazer**
+    (cria uma correção `EXCLUDE`; o registro original permanece).
+  - Recarregar a página em menos de 30 minutos com o mesmo preço não gera novo registro
+    (configurável em `settings.capture_dedupe_minutes`); mudança de preço é sempre gravada.
+  - Só o serviço em segundo plano fala com a aplicação, sempre com token
+    (`Authorization: Bearer`). Isso impede que outras páginas abertas gravem dados no servidor local.
+  - "Abrir pendentes" abre até 10 produtos da fila em abas de fundo no navegador do usuário.
+- **Rotas em português**: `/`, `/produtos/novo`, `/produtos/[id]`, `/capturar`, `/configuracoes`.
+  API da extensão em `/api/extension/*` (fora da senha opcional, protegida pelo token).
+- **Produto sem título** recebe "Produto {ASIN}", substituído pelo título da página na primeira captura.
+- **Dados simulados**: `npm run db:seed-demo` usa o `MockPriceProvider` e só roda em bancos
+  terminados em `_dev` ou `_test`, porque o histórico gerado não pode ser apagado.
+- **Limitação conhecida**: os seletores foram escritos a partir da estrutura conhecida das
+  páginas da Amazon e testados com páginas sintéticas. A validação em páginas reais depende do
+  uso; o popup da extensão mostra exatamente o que foi lido.
+
+---
+
 ## Fontes consultadas
 
 - Amazon — deprecação da PA-API 5.0 e migração para Creators API:

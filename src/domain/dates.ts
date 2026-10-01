@@ -51,3 +51,49 @@ export function formatDurationDays(ms: number): string {
   const text = String(rounded).replace(".", ",");
   return rounded === 1 ? "1 dia" : `${text} dias`;
 }
+
+function zoneOffsetMs(utcMs: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(utcMs));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const asUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour"),
+    get("minute"),
+    get("second"),
+  );
+  return asUtc - Math.floor(utcMs / 1000) * 1000;
+}
+
+/**
+ * Interpreta "AAAA-MM-DDTHH:mm" (valor de <input type="datetime-local">) no fuso informado.
+ * Retorna null se o texto não estiver nesse formato.
+ */
+export function parseLocalDateTime(value: string, timeZone = DISPLAY_TIME_ZONE): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value.trim());
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m.map(Number);
+  const naive = Date.UTC(y, mo - 1, d, h, mi);
+  const check = new Date(naive);
+  if (check.getUTCMonth() !== mo - 1 || check.getUTCDate() !== d || h > 23 || mi > 59) return null;
+  let utc = naive - zoneOffsetMs(naive, timeZone);
+  // Segunda passada cobre mudanças de horário de verão perto do instante.
+  utc = naive - zoneOffsetMs(utc, timeZone);
+  return new Date(utc);
+}
+
+/** Valor para <input type="datetime-local"> no fuso informado. */
+export function toLocalDateTimeInput(date: Date, timeZone = DISPLAY_TIME_ZONE): string {
+  const local = new Date(date.getTime() + zoneOffsetMs(date.getTime(), timeZone));
+  return local.toISOString().slice(0, 16);
+}

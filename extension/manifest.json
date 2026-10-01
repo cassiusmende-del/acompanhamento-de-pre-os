@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Histórico de preços (pessoal)",
+  "version": "0.1.0",
+  "description": "Registra no seu servidor local o preço da página da Amazon Brasil que você abriu. Não acessa a Amazon sozinha.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.amazon.com.br/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.amazon.com.br/*"],
+      "js": ["extract.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Histórico de preços"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "historico-precos@local",
+      "strict_min_version": "121.0"
+    }
+  }
+}
