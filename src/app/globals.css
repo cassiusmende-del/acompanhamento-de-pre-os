@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Interface de ferramenta: tipografia do sistema, números tabulares, cor só com significado. */
+:root {
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --muted: #6b6b6b;
+  --rule: #e2e2e2;
+  --down: #1f7a3d;
+  --up: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #121212;
+    --foreground: #e8e8e8;
+    --muted: #9a9a9a;
+    --rule: #2c2c2c;
+    --down: #5fbf7f;
+    --up: #ef8a80;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-down: var(--down);
+  --color-up: var(--up);
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}

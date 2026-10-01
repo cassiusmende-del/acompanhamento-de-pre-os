@@ -526,8 +526,9 @@ qual é qual:
   é tratado como **período sem dados** e não entra em nenhum dos dois cálculos.
 
 Com coleta automática regular, as duas versões ficam praticamente iguais. Na interface,
-a principal é a ponderada pelo tempo quando a amostragem é irregular, com a contagem
-por observação ao lado.
+média e mediana "principais" são por observação (como nos exemplos do enunciado), e a
+versão ponderada pelo tempo aparece ao lado. As frases dizem explicitamente
+"média das observações" ou "do tempo monitorado".
 
 ### 5.2 Métricas básicas
 
@@ -957,6 +958,29 @@ computador. É, na prática, uma cópia assistida do que você já está vendo.
 
 - **Pós-MVP**: e-mail via SMTP; promoções e recuperação; faixas completas; comparação com
   "preço de"; exportação CSV/JSON; série de preço total; verificação de restauração do backup.
+
+---
+
+## 13. Notas de implementação (Etapas 0 e 1)
+
+Ajustes feitos durante a implementação, que prevalecem sobre os esboços anteriores:
+
+- **Prisma 7.10** (estável). O Prisma 8 ainda está em versão candidata.
+- **Next.js 16**: a senha opcional usa `src/proxy.ts` (o antigo `middleware` foi renomeado).
+  Fontes do sistema, sem requisições ao Google Fonts.
+- **Status da observação**: apenas `OK`, `UNAVAILABLE` e `NOT_FOUND`. Falhas de coleta
+  (bloqueio, erro) ficam em `collection_runs`, conforme a seção 7.
+- **Integridade no banco**: além dos triggers de imutabilidade (também contra `TRUNCATE`),
+  há `CHECK` garantindo que status `OK` tem preço positivo e que os demais status nunca têm
+  preço; correções exigem motivo e, quando substituem preço, um valor positivo.
+- **Correções**: aplicadas por uma função TypeScript testada (`applyCorrections`), em vez de
+  uma view SQL, para haver uma única implementação. Nova ação `RESTORE` desfaz correções.
+- **Eventos**: um evento por observação. "Voltou a ficar disponível" é o campo
+  `back_in_stock` do evento de preço, não um tipo separado.
+- **Percentil**: inclui a observação atual na contagem.
+- **Limite de "preço baixo"** por percentil usa o método do posto mais próximo, que sempre
+  devolve um preço que de fato ocorreu.
+- **Cliente do banco** criado no primeiro uso (o build do Next.js não precisa de `DATABASE_URL`).
 
 ---
 

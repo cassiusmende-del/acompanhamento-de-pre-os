@@ -1,0 +1,248 @@
+// Histórico de preços — modelo de dados.
+// Valores monetários em centavos (Int). Datas em UTC (timestamptz).
+// price_observations e observation_corrections são append-only: triggers no banco
+// rejeitam UPDATE/DELETE (ver migration inicial).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Condition {
+  NEW
+  USED
+  REFURBISHED
+  UNKNOWN
+}
+
+/// Estado do produto no momento da leitura. Falhas de coleta (bloqueio, erro)
+/// NÃO são observações: ficam em collection_runs.
+enum ObservationStatus {
+  OK
+  UNAVAILABLE
+  NOT_FOUND
+}
+
+enum PriceEventType {
+  FIRST_PRICE
+  PRICE_DROP
+  PRICE_INCREASE
+  PRICE_UNCHANGED
+  PRICE_UNAVAILABLE
+}
+
+enum AlertType {
+  PRICE_BELOW
+  PERCENTILE_AT_OR_BELOW
+  AT_OR_BELOW_ALL_TIME_LOW
+  DROP_PERCENT
+  BELOW_AVERAGE
+}
+
+enum CorrectionAction {
+  EXCLUDE
+  REPLACE_PRICE
+  RESTORE
+}
+
+enum RunStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
+model Product {
+  id                  String    @id @default(cuid())
+  asin                String    @db.VarChar(10)
+  marketplace         String    @default("amazon.com.br")
+  title               String
+  url                 String
+  trackedCondition    Condition @default(NEW) @map("tracked_condition")
+  active              Boolean   @default(true)
+  /// Intervalo desejado entre capturas; usado apenas para ordenar a fila de captura.
+  targetIntervalHours Int       @default(48) @map("target_interval_hours")
+  notes               String?
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  observations PriceObservation[]
+  events       PriceEvent[]
+  alerts       Alert[]
+  snapshot     ProductSnapshot?
+
+  @@unique([asin, marketplace, trackedCondition])
+  @@map("products")
+}
+
+model PriceObservation {
+  id                String            @id @default(cuid())
+  productId         String            @map("product_id")
+  /// Redundante de propósito: cada observação é autocontida.
+  asin              String            @db.VarChar(10)
+  /// Momento em que o preço foi lido na fonte.
+  observedAt        DateTime          @map("observed_at") @db.Timestamptz
+  /// Momento em que a linha foi gravada.
+  recordedAt        DateTime          @default(now()) @map("recorded_at") @db.Timestamptz
+  status            ObservationStatus
+  /// null quando não há preço. Ausência de preço nunca é gravada como 0.
+  priceCents        Int?              @map("price_cents")
+  currency          String            @default("BRL") @db.Char(3)
+  /// Preço "de" / referência exibida pela fonte.
+  listPriceCents    Int?              @map("list_price_cents")
+  /// null = desconhecido; 0 = frete grátis confirmado.
+  shippingCents     Int?              @map("shipping_cents")
+  couponText        String?           @map("coupon_text")
+  couponCents       Int?              @map("coupon_cents")
+  /// Preenchido só quando todos os componentes são conhecidos.
+  totalCents        Int?              @map("total_cents")
+  sellerName        String?           @map("seller_name")
+  sellerId          String?           @map("seller_id")
+  fulfilledByAmazon Boolean?          @map("fulfilled_by_amazon")
+  isBuyBoxWinner    Boolean?          @map("is_buy_box_winner")
+  condition         Condition         @default(UNKNOWN)
+  availability      String?
+  /// manual | bookmarklet | extension | mock | creators_api | ...
+  source            String
+  /// Marcada na gravação quando o valor destoa muito do histórico recente.
+  suspect           Boolean           @default(false)
+  suspectReason     String?           @map("suspect_reason")
+  collectionRunId   String?           @map("collection_run_id")
+  rawPayload        Json?             @map("raw_payload")
+
+  product       Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
+  collectionRun CollectionRun?          @relation(fields: [collectionRunId], references: [id], onDelete: Restrict)
+  corrections   ObservationCorrection[]
+  event         PriceEvent?             @relation("EventObservation")
+
+  @@index([productId, observedAt])
+  @@map("price_observations")
+}
+
+/// Correções administrativas explícitas. A mais recente de cada observação prevalece;
+/// RESTORE desfaz correções anteriores. O dado original nunca é alterado.
+model ObservationCorrection {
+  id            String           @id @default(cuid())
+  observationId String           @map("observation_id")
+  action        CorrectionAction
+  newPriceCents Int?             @map("new_price_cents")
+  reason        String
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  observation PriceObservation @relation(fields: [observationId], references: [id], onDelete: Restrict)
+
+  @@index([observationId, createdAt])
+  @@map("observation_corrections")
+}
+
+/// Derivado das observações efetivas; pode ser recalculado.
+model PriceEvent {
+  id                    String         @id @default(cuid())
+  productId             String         @map("product_id")
+  observationId         String         @unique @map("observation_id")
+  previousObservationId String?        @map("previous_observation_id")
+  type                  PriceEventType
+  occurredAt            DateTime       @map("occurred_at") @db.Timestamptz
+  previousPriceCents    Int?           @map("previous_price_cents")
+  newPriceCents         Int?           @map("new_price_cents")
+  deltaCents            Int?           @map("delta_cents")
+  deltaPercent          Decimal?       @map("delta_percent") @db.Decimal(9, 4)
+  sellerChanged         Boolean        @default(false) @map("seller_changed")
+  /// Primeiro preço após um período indisponível.
+  backInStock           Boolean        @default(false) @map("back_in_stock")
+
+  product     Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  observation PriceObservation @relation("EventObservation", fields: [observationId], references: [id], onDelete: Restrict)
+
+  @@index([productId, occurredAt])
+  @@map("price_events")
+}
+
+model Alert {
+  id             String    @id @default(cuid())
+  productId      String    @map("product_id")
+  type           AlertType
+  /// PRICE_BELOW
+  thresholdCents Int?      @map("threshold_cents")
+  /// PERCENTILE_AT_OR_BELOW (ex.: 10) ou DROP_PERCENT (ex.: 10)
+  percent        Decimal?  @db.Decimal(6, 2)
+  enabled        Boolean   @default(true)
+  cooldownMin    Int       @default(1440) @map("cooldown_min")
+  /// A condição estava satisfeita na última avaliação? Dispara só na transição.
+  lastState      Boolean   @default(false) @map("last_state")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  product Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  events  AlertEvent[]
+
+  @@index([productId])
+  @@map("alerts")
+}
+
+model AlertEvent {
+  id            String    @id @default(cuid())
+  alertId       String    @map("alert_id")
+  observationId String    @map("observation_id")
+  triggeredAt   DateTime  @default(now()) @map("triggered_at") @db.Timestamptz
+  message       String
+  /// Retrato das métricas no momento do disparo.
+  metrics       Json
+  notifiedAt    DateTime? @map("notified_at") @db.Timestamptz
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([alertId, triggeredAt])
+  @@map("alert_events")
+}
+
+/// Cada sessão de captura (envio manual, bookmarklet, extensão) ou execução de coleta.
+model CollectionRun {
+  id               String    @id @default(cuid())
+  provider         String
+  /// manual | bookmarklet | extension | schedule
+  trigger          String
+  startedAt        DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  finishedAt       DateTime? @map("finished_at") @db.Timestamptz
+  status           RunStatus
+  okCount          Int       @default(0) @map("ok_count")
+  unavailableCount Int       @default(0) @map("unavailable_count")
+  blockedCount     Int       @default(0) @map("blocked_count")
+  errorCount       Int       @default(0) @map("error_count")
+  log              Json?
+
+  observations PriceObservation[]
+
+  @@index([startedAt])
+  @@map("collection_runs")
+}
+
+/// Cache das métricas principais para a listagem. Recalculável a qualquer momento.
+model ProductSnapshot {
+  productId          String    @id @map("product_id")
+  computedAt         DateTime  @map("computed_at") @db.Timestamptz
+  lastObservedAt     DateTime? @map("last_observed_at") @db.Timestamptz
+  currentPriceCents  Int?      @map("current_price_cents")
+  previousPriceCents Int?      @map("previous_price_cents")
+  lowestPriceCents   Int?      @map("lowest_price_cents")
+  highestPriceCents  Int?      @map("highest_price_cents")
+  medianPriceCents   Int?      @map("median_price_cents")
+  pricedCount        Int       @default(0) @map("priced_count")
+  percentile         Decimal?  @db.Decimal(6, 2)
+  data               Json
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_snapshots")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("settings")
+}
