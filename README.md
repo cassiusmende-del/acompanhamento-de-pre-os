@@ -55,7 +55,7 @@ Requisitos: Node.js 22.
 
 ```bash
 npm install
-docker compose up -d db   # ou um PostgreSQL próprio; ajuste DATABASE_URL no .env
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db   # publica o banco em 127.0.0.1
 npm run db:deploy         # aplica as migrations
 npm run dev
 ```
