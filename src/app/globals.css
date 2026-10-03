@@ -8,6 +8,9 @@
   --rule: #e2e2e2;
   --down: #1f7a3d;
   --up: #b3261e;
+  /* gráficos: série única (azul validado), faixa de indisponibilidade */
+  --series-1: #2a78d6;
+  --band: #efefed;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -18,6 +21,8 @@
     --rule: #2c2c2c;
     --down: #5fbf7f;
     --up: #ef8a80;
+    --series-1: #3987e5;
+    --band: #242424;
   }
 }
 
@@ -28,6 +33,8 @@
   --color-rule: var(--rule);
   --color-down: var(--down);
   --color-up: var(--up);
+  --color-series-1: var(--series-1);
+  --color-band: var(--band);
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;

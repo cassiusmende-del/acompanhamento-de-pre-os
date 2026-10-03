@@ -1,3 +1,4 @@
+export * from "./chart";
 export * from "./config";
 export * from "./corrections";
 export * from "./events";

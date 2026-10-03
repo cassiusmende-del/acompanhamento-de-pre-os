@@ -1031,6 +1031,27 @@ Ajustes feitos durante a implementação, que prevalecem sobre os esboços anter
 
 ---
 
+## 16. Notas de implementação (Etapa 4)
+
+- **Página do produto** reúne, nesta ordem: preço atual (ou "indisponível desde"), números
+  principais (menor, média, mediana, maior, observações; média e mediana também pelo tempo),
+  frases descritivas, gráfico, comparação com o preço atual, menor preço por período, posição no
+  histórico, frequência por faixa, períodos de preço baixo, mudanças, registro manual e observações.
+- **Gráfico** (`src/components/PriceChart.tsx`, Recharts): uma única série em degraus (`stepAfter`),
+  cor validada nos modos claro e escuro; linhas de referência discretas para menor preço e mediana
+  do histórico inteiro (incluídas no eixo mesmo em períodos curtos, para manter o contexto); faixas
+  cinza para indisponibilidade; a linha é interrompida onde não há dados; tooltip com cruz vertical;
+  marcas do eixo em valores redondos (`niceTicks`). A série é montada por funções puras e testadas
+  em `src/analytics/chart.ts`.
+- **Frequência por faixa** mostra também as faixas vazias entre o menor e o maior preço, e alarga
+  as faixas até no máximo 14 linhas.
+- **Preço baixo**: o limite padrão é o percentil 10 (com dados suficientes); o usuário pode informar
+  outro valor pelo parâmetro `?limite=` (formulário na própria seção), sem gravar nada.
+- **Tabelas** têm rolagem horizontal própria; a página não rola de lado no celular. A tabela de
+  observações mostra as 30 mais recentes, com opção de ver todas.
+
+---
+
 ## Fontes consultadas
 
 - Amazon — deprecação da PA-API 5.0 e migração para Creators API:

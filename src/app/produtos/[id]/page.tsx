@@ -8,8 +8,29 @@ import {
 import { inputClass, secondaryButtonClass } from "@/components/form";
 import { DateTime, Money, sourceLabel } from "@/components/format";
 import { toLocalDateTimeInput } from "@/domain/dates";
-import { formatSignedBRL, formatSignedPercent } from "@/domain/money";
+import { formatSignedBRL, formatSignedPercent, parseBRL } from "@/domain/money";
+import {
+  applyCorrections,
+  buildChartSeries,
+  buildSegments,
+  computeProductAnalytics,
+  DAY_MS,
+  describe,
+  readableBands,
+} from "@/analytics";
+import { PriceChart } from "@/components/PriceChart";
 import { getDb } from "@/lib/db";
+import { loadProductHistory } from "@/processing/process";
+import {
+  Behavior,
+  Comparison,
+  CurrentPrice,
+  Distribution,
+  KeyNumbers,
+  LowPrices,
+  Position,
+  WindowMinimums,
+} from "./analysis-sections";
 import { EditProductForm } from "./EditProductForm";
 import { ManualObservationForm } from "./ManualObservationForm";
 
@@ -23,6 +44,7 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 const EVENTS_SHOWN = 50;
+const OBSERVATIONS_SHOWN = 30;
 
 const CONDITION_LABELS: Record<string, string> = {
   NEW: "novo",
@@ -31,8 +53,12 @@ const CONDITION_LABELS: Record<string, string> = {
   UNKNOWN: "",
 };
 
-export default async function ProductPage({ params }: PageProps<"/produtos/[id]">) {
+export default async function ProductPage({ params, searchParams }: PageProps<"/produtos/[id]">) {
   const { id } = await params;
+  const { limite, obs } = await searchParams;
+  const showAllObservations = obs === "todas";
+  const thresholdInput = typeof limite === "string" ? limite.trim() : "";
+  const userThreshold = thresholdInput ? parseBRL(thresholdInput) : null;
   const db = getDb();
   const product = await db.product.findUnique({
     where: { id },
@@ -50,7 +76,32 @@ export default async function ProductPage({ params }: PageProps<"/produtos/[id]"
   });
   if (!product) notFound();
 
+  const now = new Date();
+  const history = await loadProductHistory(db, product.id);
+  const analytics = computeProductAnalytics({
+    ...history,
+    now,
+    lowPriceThresholdCents: userThreshold !== null && userThreshold > 0 ? userThreshold : null,
+  });
+  const sentences = describe(analytics, now);
+  const segments = buildSegments(
+    applyCorrections(
+      history.observations.filter((o) => o.observedAt.getTime() <= now.getTime()),
+      history.corrections,
+    ),
+    now,
+    analytics.config.maxValidityDays * DAY_MS,
+  );
+  const chartSeries = buildChartSeries(segments, now);
+  const distribution =
+    analytics.median.byObservation !== null
+      ? readableBands(segments, analytics.median.byObservation)
+      : null;
+
   const observations = product.observations;
+  const shownObservations = showAllObservations
+    ? observations
+    : observations.slice(0, OBSERVATIONS_SHOWN);
   // Último registro considerado na análise (ignora os excluídos; aplica preço corrigido).
   const latestEffective = observations.find((o) => o.corrections[0]?.action !== "EXCLUDE");
   const latest = latestEffective && {
@@ -95,32 +146,52 @@ export default async function ProductPage({ params }: PageProps<"/produtos/[id]"
         </p>
       )}
 
-      <section className="mt-6">
-        <p className="text-sm text-muted">Último registro</p>
-        <p className="text-2xl font-semibold">
-          {latest ? (
-            latest.status === "OK" ? (
-              <Money cents={latest.priceCents} />
-            ) : (
-              <span className="text-muted">indisponível</span>
-            )
-          ) : (
-            <span className="text-muted">nenhum</span>
-          )}
-        </p>
-        {latest && (
-          <p className="text-sm text-muted">
-            <DateTime date={latest.observedAt} /> · {sourceLabel(latest.source)} ·{" "}
-            {observations.length} {observations.length === 1 ? "observação" : "observações"}
-            {excludedCount > 0 &&
-              ` (${excludedCount} excluída${excludedCount === 1 ? "" : "s"} da análise)`}
-          </p>
-        )}
-        <p className="mt-2 text-xs text-muted">
-          Gráfico e comparações com o histórico chegam com as telas de análise.
-        </p>
-      </section>
+      <CurrentPrice
+        a={analytics}
+        now={now}
+        sellerName={latest?.status === "OK" ? latest.sellerName : null}
+        sourceLabel={latest ? sourceLabel(latest.source) : null}
+      />
+      <KeyNumbers a={analytics} now={now} />
+      <Behavior sentences={sentences} pendingSuspect={analytics.counts.pendingSuspect} />
 
+      {analytics.counts.priced > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-2 font-semibold">Histórico de preços</h2>
+          <PriceChart
+            series={chartSeries}
+            now={now.getTime()}
+            firstAt={analytics.firstObservedAt?.getTime() ?? null}
+            lowestCents={analytics.lowest?.priceCents ?? null}
+            medianCents={
+              analytics.median.byObservation === null
+                ? null
+                : Math.round(analytics.median.byObservation)
+            }
+          />
+        </section>
+      )}
+
+      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <Comparison a={analytics} />
+        <WindowMinimums a={analytics} />
+      </div>
+
+      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <Position a={analytics} />
+        {distribution && (
+          <Distribution
+            bands={distribution.bands}
+            widthCents={distribution.width}
+            currentCents={analytics.current?.priceCents ?? null}
+            validityDays={analytics.config.maxValidityDays}
+          />
+        )}
+      </div>
+
+      <div id="preco-baixo" className="mt-8">
+        <LowPrices a={analytics} productId={product.id} thresholdInput={thresholdInput} />
+      </div>
       <section className="mt-8 border-t border-rule pt-4">
         <h2 className="font-semibold">Mudanças de preço</h2>
         {events.length === 0 ? (
@@ -196,7 +267,15 @@ export default async function ProductPage({ params }: PageProps<"/produtos/[id]"
       </section>
 
       <section id="observacoes" className="mt-8 border-t border-rule pt-4">
-        <h2 className="font-semibold">Observações</h2>
+        <h2 className="font-semibold">
+          Observações{" "}
+          <span className="text-sm font-normal text-muted">
+            ({observations.length}
+            {excludedCount > 0 &&
+              `; ${excludedCount} excluída${excludedCount === 1 ? "" : "s"} da análise`}
+            )
+          </span>
+        </h2>
         {observations.length === 0 ? (
           <p className="mt-2 text-sm text-muted">
             Nenhuma observação ainda. Abra o produto na Amazon com a extensão instalada ou registre
@@ -218,7 +297,7 @@ export default async function ProductPage({ params }: PageProps<"/produtos/[id]"
                 </tr>
               </thead>
               <tbody>
-                {observations.map((o) => {
+                {shownObservations.map((o) => {
                   const correction = o.corrections[0];
                   const excluded = correction?.action === "EXCLUDE";
                   const replaced = correction?.action === "REPLACE_PRICE";
@@ -330,6 +409,14 @@ export default async function ProductPage({ params }: PageProps<"/produtos/[id]"
                 })}
               </tbody>
             </table>
+            {observations.length > shownObservations.length && (
+              <p className="mt-2 text-sm">
+                Mostrando as {shownObservations.length} mais recentes de {observations.length}.{" "}
+                <a href={`/produtos/${product.id}?obs=todas#observacoes`} className="underline">
+                  Ver todas
+                </a>
+              </p>
+            )}
           </div>
         )}
       </section>

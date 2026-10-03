@@ -19,7 +19,7 @@ A análise técnica completa, com as decisões tomadas, está em
 | 1     | Núcleo de análise (funções puras e testes)                        | concluída |
 | 2     | Produtos e captura (formulário, extensão, fila de captura)        | concluída |
 | 3     | Processamento (eventos, snapshot, correções)                      | concluída |
-| 4     | Telas de análise                                                  | pendente  |
+| 4     | Telas de análise                                                  | concluída |
 | 5     | Alertas                                                           | pendente  |
 
 ## Extensão do navegador
