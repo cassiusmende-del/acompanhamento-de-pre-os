@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { APP_VERSION, APP_VERSION_LABEL } from "@/version";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -33,6 +34,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </header>
         <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+        <footer className="mx-auto max-w-5xl px-4 pb-6 text-xs text-muted">
+          versão {APP_VERSION} · {APP_VERSION_LABEL}
+        </footer>
       </body>
     </html>
   );

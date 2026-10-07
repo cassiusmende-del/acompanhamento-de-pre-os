@@ -24,3 +24,4 @@ Aplicação pessoal de histórico de preços (Amazon Brasil). Leia `docs/ANALISE
   `tests/extension/`; se a extensão não ler o preço, nada é gravado.
 - Páginas que leem o banco usam `export const dynamic = "force-dynamic"` (sem Cache Components).
 - Após gravar observação ou correção, chame `processProduct` (eventos e retrato são derivados).
+- A cada entrega, atualize `src/version.ts` (rodapé e /api/health) — o usuário confere a atualização por ali.

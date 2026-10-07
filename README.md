@@ -70,6 +70,16 @@ npm run dev
 | `npm run db:reprocess` | Recalcula eventos e retratos de todos os produtos                   |
 | `npm run db:seed-demo` | Gera produtos e histórico simulados (só em bancos `*_dev`/`*_test`) |
 
+## Atualizar para uma versão nova
+
+- **Windows:** dê dois cliques em `atualizar.cmd`, na pasta do projeto.
+- **macOS / Linux:** rode `./atualizar.sh`.
+
+O script confere o Docker, faz um backup do banco (`backups/antes-de-atualizar-*.dump`), baixa a
+versão nova, reconstrói só se algo mudou, espera a aplicação responder e mostra a versão. Se a
+extensão mudou, ele avisa para recarregá-la em `chrome://extensions`. Se qualquer passo falhar
+antes da atualização, nada é alterado. A versão em uso aparece no rodapé da aplicação.
+
 ## Backup e restauração
 
 O serviço `backup` gera um `pg_dump` ao iniciar e depois a cada 24 h em `./backups`,
