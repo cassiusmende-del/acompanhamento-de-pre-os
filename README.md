@@ -34,6 +34,11 @@ você abrir. Ela não acessa a Amazon sozinha, não usa sua conta e não lê o c
 3. Cadastre produtos pela aplicação ou pelo botão **Monitorar este produto** no menu da extensão.
 
 Ao abrir um produto monitorado, o preço é registrado e aparece um aviso com **Desfazer**.
+
+**Vários produtos de uma vez:** abra o **carrinho** da Amazon. A extensão registra o preço de
+todos os itens monitorados do carrinho e de "Salvo para mais tarde" e oferece **Monitorar** para
+os que ainda não estão cadastrados. Uma dica: use "Salvo para mais tarde" como lista de
+acompanhamento.
 Se a extensão não conseguir ler o preço, nada é gravado e o aviso leva ao registro manual.
 
 ## Rodar com Docker (uso normal)

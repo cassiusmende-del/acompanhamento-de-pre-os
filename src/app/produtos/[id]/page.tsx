@@ -335,6 +335,14 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
                         {confirmed && (
                           <span className="block text-xs text-muted">valor conferido</span>
                         )}
+                        {o.pixPriceCents !== null && (
+                          <span className="block text-xs text-muted">
+                            Pix: <Money cents={o.pixPriceCents} />
+                          </span>
+                        )}
+                        {o.primeExclusive && (
+                          <span className="block text-xs text-muted">preço exclusivo Prime</span>
+                        )}
                         {CONDITION_LABELS[o.condition] && (
                           <span className="block text-xs text-muted">
                             {CONDITION_LABELS[o.condition]}

@@ -1052,6 +1052,34 @@ Ajustes feitos durante a implementação, que prevalecem sobre os esboços anter
 
 ---
 
+## 17. Captura pelo carrinho (out/2026)
+
+Motivo: abrir uma aba por produto não escala com muitos produtos. O carrinho (incluindo
+"Salvo para mais tarde") mostra o preço de todos os itens numa página só, aberta pelo próprio
+usuário — continua dentro da decisão de não automatizar o navegador.
+
+Regras, derivadas de uma página real do carrinho enviada pelo usuário (que não foi versionada):
+
+- Cada item é `div.sc-list-item[data-asin]`, com `data-itemtype` (`active`/`saved`), `data-price`,
+  `data-producttitle` e `data-outofstock`.
+- **Preço no Pix:** quando o destaque é `.apex-promotions-unified-otp` ("à vista no Pix ou NuPay",
+  5% abaixo), o preço principal é `data-price` e o do Pix vai para `pix_price_cents`. Misturar os
+  dois criaria quedas e altas falsas.
+- **Atributo desatualizado:** quando a Amazon troca a oferta, `data-price` pode ficar antigo; nos
+  casos sem Pix vale o preço visível (`.apex-price-to-pay-value`, `.sc-product-price`).
+- **Indisponível:** "Não disponível" ou "não está mais disponível com o vendedor selecionado" vira
+  `UNAVAILABLE`; o "a partir de R$ X" de outras ofertas nunca é registrado.
+- Preço "De:" vem do `.a-offscreen` que começa com "De:"; "Preço exclusivo Prime" vai para
+  `prime_exclusive`; vendedor de `.sc-seller`; ASIN repetido conta uma vez.
+- Sem preço confiável, o item não é enviado; o aviso informa quantos ficaram de fora.
+
+Fluxo: ao abrir o carrinho, a extensão envia todos os itens legíveis para
+`/api/extension/captures/batch`; só produtos monitorados são gravados (origem `cart`, uma sessão de
+captura para o lote, mesma regra de duplicidade). O aviso resume o resultado e oferece
+"Monitorar os N" para os itens ainda não cadastrados (`/api/extension/products/batch`).
+
+---
+
 ## Fontes consultadas
 
 - Amazon — deprecação da PA-API 5.0 e migração para Creators API:

@@ -103,13 +103,18 @@ model PriceObservation {
   couponCents       Int?              @map("coupon_cents")
   /// Preenchido só quando todos os componentes são conhecidos.
   totalCents        Int?              @map("total_cents")
+  /// Preço à vista no Pix/NuPay exibido pela Amazon (desconto por forma de pagamento).
+  /// Fica fora da série principal para não criar quedas e altas falsas.
+  pixPriceCents     Int?              @map("pix_price_cents")
+  /// A página indicava "Preço exclusivo Prime".
+  primeExclusive    Boolean?          @map("prime_exclusive")
   sellerName        String?           @map("seller_name")
   sellerId          String?           @map("seller_id")
   fulfilledByAmazon Boolean?          @map("fulfilled_by_amazon")
   isBuyBoxWinner    Boolean?          @map("is_buy_box_winner")
   condition         Condition         @default(UNKNOWN)
   availability      String?
-  /// manual | bookmarklet | extension | mock | creators_api | ...
+  /// manual | extension | cart | mock | ...
   source            String
   /// Marcada na gravação quando o valor destoa muito do histórico recente.
   suspect           Boolean           @default(false)

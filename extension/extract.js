@@ -9,7 +9,7 @@
 (function (root) {
   "use strict";
 
-  var VERSION = "0.1.0";
+  var VERSION = "0.2.0";
   var ASIN_RE = /^[A-Z0-9]{10}$/;
   var URL_ASIN_RE = /\/(?:dp|gp\/product|gp\/aw\/d|gp\/offer-listing)\/([A-Z0-9]{10})(?=[/?#]|$)/i;
 
@@ -66,7 +66,8 @@
     "#vpcButton",
   ];
 
-  var UNAVAILABLE_RE = /(indispon[ií]vel|n[aã]o (est[aá] )?dispon[ií]vel|esgotad|fora de estoque)/i;
+  var UNAVAILABLE_RE =
+    /(indispon[ií]vel|n[aã]o (est[aá] )?(mais )?dispon[ií]vel|esgotad|fora de estoque)/i;
 
   function clean(text) {
     return (text || "").replace(/\s+/g, " ").trim();
@@ -278,5 +279,129 @@
     };
   }
 
-  root.HistoricoPrecosExtract = { extract: extract, parsePrice: parsePrice, version: VERSION };
+  // -------------------------------------------------------------------------
+  // Carrinho (inclui "Salvo para mais tarde")
+  // -------------------------------------------------------------------------
+
+  /** Preço com ponto decimal, como nos atributos data-price ("179", "26.6"). */
+  function parseAttrPrice(raw) {
+    if (!raw || !/^\d+(\.\d{1,2})?$/.test(raw)) return null;
+    var cents = Math.round(Number(raw) * 100);
+    return cents > 0 ? cents : null;
+  }
+
+  function isCartPage(doc) {
+    return Boolean(
+      doc.querySelector("#sc-active-cart, #sc-saved-cart, div.sc-list-item[data-asin]"),
+    );
+  }
+
+  /**
+   * Lê todos os itens do carrinho e de "Salvo para mais tarde".
+   *
+   * Regras (derivadas de uma página real do carrinho):
+   * - Item "não disponível" vira UNAVAILABLE; o "a partir de R$ X" de outras ofertas é ignorado.
+   * - Quando o preço em destaque é o preço à vista no Pix/NuPay, o preço principal é o normal
+   *   (atributo data-price) e o do Pix é guardado à parte.
+   * - Nos demais casos vale o preço visível (o atributo pode estar desatualizado quando a
+   *   Amazon troca a oferta).
+   * - Sem preço confiável, o item fica como UNREADABLE e não é registrado.
+   */
+  function extractCart(doc) {
+    var nodes = doc.querySelectorAll("div.sc-list-item[data-asin]");
+    var items = [];
+    var seen = {};
+    var duplicates = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var asin = clean(el.getAttribute("data-asin")).toUpperCase();
+      if (!ASIN_RE.test(asin)) continue;
+      if (seen[asin]) {
+        duplicates++;
+        continue;
+      }
+      seen[asin] = true;
+
+      var title =
+        clean(el.getAttribute("data-producttitle")) ||
+        textOf(el.querySelector(".sc-product-title .a-truncate-full, .sc-product-title")) ||
+        null;
+      var section = el.getAttribute("data-itemtype") === "saved" ? "saved" : "active";
+      var availabilityText = textOf(el.querySelector(".sc-product-availability")) || null;
+      var attrCents = parseAttrPrice(clean(el.getAttribute("data-price")));
+      var diagnostics = { extractorVersion: VERSION, page: "cart", section: section };
+
+      var unavailable =
+        el.getAttribute("data-outofstock") === "1" ||
+        Boolean(availabilityText && UNAVAILABLE_RE.test(availabilityText));
+
+      var status = "OK";
+      var priceCents = null;
+      var pixPriceCents = null;
+      if (unavailable) {
+        status = "UNAVAILABLE";
+      } else {
+        var pixEl = el.querySelector(".apex-promotions-unified-otp .a-offscreen");
+        var visibleEl = el.querySelector(
+          ".apex-price-to-pay-value .a-offscreen, .sc-product-price, .sc-badge-price-to-pay .sc-price",
+        );
+        if (pixEl) {
+          pixPriceCents = parsePrice(pixEl.textContent);
+          if (attrCents && (!pixPriceCents || attrCents >= pixPriceCents)) {
+            priceCents = attrCents;
+            diagnostics.priceSource = "data-price (destaque era preço no Pix)";
+          }
+        } else if (visibleEl && parsePrice(visibleEl.textContent)) {
+          priceCents = parsePrice(visibleEl.textContent);
+          diagnostics.priceSource = "visível";
+          if (attrCents && attrCents !== priceCents) diagnostics.attrPriceCents = attrCents;
+        } else if (attrCents) {
+          priceCents = attrCents;
+          diagnostics.priceSource = "data-price";
+        }
+        if (!priceCents) {
+          status = "UNREADABLE";
+          pixPriceCents = null;
+        }
+      }
+
+      var listPriceCents = null;
+      var basis = null;
+      var offs = el.querySelectorAll(".sc-apex-cart-price .a-offscreen");
+      for (var j = 0; j < offs.length; j++) {
+        if (/^De:/i.test(clean(offs[j].textContent))) basis = parsePrice(offs[j].textContent);
+      }
+      if (!basis) {
+        var basisEl = el.querySelector(".apex-basis-price-value");
+        if (basisEl) basis = parsePrice(basisEl.textContent.replace(/null/g, ""));
+      }
+      if (basis && priceCents && basis > priceCents) listPriceCents = basis;
+
+      var sellerText = textOf(el.querySelector(".sc-seller"));
+      var sellerName = sellerText ? clean(sellerText.replace(/^Vendido por:?/i, "")) || null : null;
+
+      items.push({
+        asin: asin,
+        title: title ? title.slice(0, 500) : null,
+        section: section,
+        status: status,
+        priceCents: status === "OK" ? priceCents : null,
+        pixPriceCents: status === "OK" ? pixPriceCents : null,
+        listPriceCents: status === "OK" ? listPriceCents : null,
+        primeExclusive: /pre[çc]o exclusivo prime/i.test(el.textContent || ""),
+        sellerName: sellerName ? sellerName.slice(0, 200) : null,
+        availabilityText: availabilityText ? availabilityText.slice(0, 200) : null,
+        diagnostics: diagnostics,
+      });
+    }
+    return { isCart: isCartPage(doc), items: items, duplicates: duplicates };
+  }
+
+  root.HistoricoPrecosExtract = {
+    extract: extract,
+    extractCart: extractCart,
+    isCartPage: isCartPage,
+    parsePrice: parsePrice,
+    version: VERSION,
+  };
 })(globalThis);

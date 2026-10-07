@@ -13,7 +13,7 @@ import { computeTotalCents } from "./total";
 
 type Db = PrismaClient;
 export type Condition = "NEW" | "USED" | "REFURBISHED" | "UNKNOWN";
-export type CaptureSource = "extension" | "manual" | "mock";
+export type CaptureSource = "extension" | "cart" | "manual" | "mock";
 
 export function placeholderTitle(asin: string): string {
   return `Produto ${asin}`;
@@ -76,7 +76,12 @@ export interface RecordObservationInput {
   fulfilledByAmazon?: boolean | null;
   condition?: Condition;
   availability?: string | null;
+  /** Preço à vista no Pix/NuPay (fora da série principal). */
+  pixPriceCents?: number | null;
+  primeExclusive?: boolean | null;
   source: CaptureSource;
+  /** Sessão de captura já criada (lotes); sem ela, cria uma sessão para esta observação. */
+  collectionRunId?: string;
   /** Título lido da página; substitui o título provisório do produto. */
   pageTitle?: string | null;
   rawPayload?: unknown;
@@ -140,17 +145,21 @@ export async function recordObservation(
   );
 
   const observation = await db.$transaction(async (tx) => {
-    const run = await tx.collectionRun.create({
-      data: {
-        provider: input.source,
-        trigger: input.source,
-        status: "SUCCEEDED",
-        finishedAt: now,
-        okCount: input.status === "OK" ? 1 : 0,
-        unavailableCount: input.status === "OK" ? 0 : 1,
-      },
-      select: { id: true },
-    });
+    const runId =
+      input.collectionRunId ??
+      (
+        await tx.collectionRun.create({
+          data: {
+            provider: input.source,
+            trigger: input.source,
+            status: "SUCCEEDED",
+            finishedAt: now,
+            okCount: input.status === "OK" ? 1 : 0,
+            unavailableCount: input.status === "OK" ? 0 : 1,
+          },
+          select: { id: true },
+        })
+      ).id;
     const created = await tx.priceObservation.create({
       data: {
         productId: product.id,
@@ -175,7 +184,9 @@ export async function recordObservation(
         source: input.source,
         suspect: assessment.suspect,
         suspectReason: assessment.suspect ? assessment.reason : null,
-        collectionRunId: run.id,
+        pixPriceCents: priceCents === null ? null : (input.pixPriceCents ?? null),
+        primeExclusive: input.primeExclusive ?? null,
+        collectionRunId: runId,
         rawPayload:
           input.rawPayload === undefined
             ? Prisma.JsonNull

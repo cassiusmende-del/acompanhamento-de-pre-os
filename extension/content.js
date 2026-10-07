@@ -120,8 +120,87 @@
     no_token: "Configure o token nas opções da extensão.",
   };
 
+  // ---------- carrinho: todos os itens de uma vez ----------
+  async function runCart({ force = false, manual = false } = {}) {
+    const cart = globalThis.HistoricoPrecosExtract.extractCart(document);
+    if (!cart.isCart || cart.items.length === 0) return { ok: false, error: "empty_cart" };
+
+    const key = "cart|" + cart.items.map((i) => `${i.asin}:${i.status}:${i.priceCents}`).join(",");
+    if (!manual && handledKey === key) return { ok: true, skipped: true };
+    handledKey = key;
+
+    const config = await send({ type: "config" });
+    if (!manual && config && config.autoCapture === false) return { ok: true, skipped: true };
+
+    const readable = cart.items.filter((i) => i.status !== "UNREADABLE");
+    const payload = {
+      kind: "cart",
+      pageUrl: location.href.split("#")[0],
+      unreadable: cart.items.length - readable.length,
+      force: Boolean(force),
+      items: readable.map((i) => ({
+        asin: i.asin,
+        title: i.title,
+        section: i.section,
+        status: i.status,
+        priceCents: i.priceCents,
+        pixPriceCents: i.pixPriceCents,
+        listPriceCents: i.listPriceCents,
+        primeExclusive: i.primeExclusive,
+        sellerName: i.sellerName,
+        availability: i.availabilityText,
+        diagnostics: i.diagnostics,
+      })),
+    };
+    const result = await send({ type: "captureBatch", payload });
+    if (!result || !result.ok) {
+      showToast(
+        [ERRORS[result && result.error] || "Não foi possível registrar os preços do carrinho."],
+        [],
+        "warn",
+      );
+      return result;
+    }
+    const { summary, lines } = result.body;
+    // Recarregar o carrinho sem novidades não precisa de aviso.
+    if (
+      !manual &&
+      summary.recorded === 0 &&
+      summary.notMonitored.length === 0 &&
+      summary.unreadable === 0
+    ) {
+      return result;
+    }
+    const actions = [];
+    if (summary.notMonitored.length > 0) {
+      const n = summary.notMonitored.length;
+      actions.push({
+        label: n === 1 ? "Monitorar este item" : `Monitorar os ${n}`,
+        onClick: async () => {
+          const r = await send({
+            type: "monitorBatch",
+            items: summary.notMonitored.map((x) => ({ asin: x.asin, title: x.title || x.asin })),
+          });
+          if (r && r.ok) await runCart({ manual: true });
+          else showToast(["Não foi possível cadastrar os itens."], [], "warn");
+        },
+      });
+    }
+    actions.push({
+      label: "Ver registros",
+      onClick: () => send({ type: "openApp", path: "/registros" }),
+    });
+    showToast(
+      ["Carrinho: " + lines[0], ...lines.slice(1)],
+      actions,
+      summary.suspect ? "warn" : undefined,
+    );
+    return result;
+  }
+
   // ---------- fluxo principal ----------
   async function run({ force = false, manual = false } = {}) {
+    if (globalThis.HistoricoPrecosExtract.isCartPage(document)) return runCart({ force, manual });
     const data = globalThis.HistoricoPrecosExtract.extract(document, location.href);
     if (!data.asin || !data.isProductPage) return { ok: false, error: "not_product_page" };
 
@@ -193,6 +272,10 @@
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "extract") {
       sendResponse(globalThis.HistoricoPrecosExtract.extract(document, location.href));
+      return false;
+    }
+    if (message.type === "extractCart") {
+      sendResponse(globalThis.HistoricoPrecosExtract.extractCart(document));
       return false;
     }
     if (message.type === "captureNow") {

@@ -65,6 +65,36 @@ function describe(data, monitored) {
   }
 }
 
+function describeCart(cart) {
+  const container = $("page");
+  container.innerHTML = "";
+  const title = document.createElement("p");
+  title.textContent = "Carrinho";
+  title.style.fontWeight = "600";
+  const count = (f) => cart.items.filter(f).length;
+  const dl = document.createElement("dl");
+  const rows = [
+    ["Itens lidos", String(cart.items.length)],
+    ["No carrinho", String(count((i) => i.section === "active"))],
+    ["Salvos para depois", String(count((i) => i.section === "saved"))],
+    ["Indisponíveis", String(count((i) => i.status === "UNAVAILABLE"))],
+    ["Com preço no Pix", String(count((i) => i.pixPriceCents))],
+    ["Sem leitura segura", String(count((i) => i.status === "UNREADABLE"))],
+  ];
+  for (const [k, v] of rows) {
+    const dt = document.createElement("dt");
+    dt.textContent = k;
+    const dd = document.createElement("dd");
+    dd.textContent = v;
+    dl.append(dt, dd);
+  }
+  const note = document.createElement("p");
+  note.className = "muted";
+  note.textContent =
+    "O preço registrado é o preço normal; o preço à vista no Pix fica guardado à parte. Só produtos monitorados são registrados.";
+  container.append(title, dl, note);
+}
+
 async function init() {
   const test = await send({ type: "test" });
   $("connection").textContent =
@@ -80,7 +110,24 @@ async function init() {
       data = null;
     }
   }
-  if (!data || !data.asin || !data.isProductPage) {
+  let cart = null;
+  if (tab && tab.url && tab.url.startsWith("https://www.amazon.com.br/")) {
+    try {
+      cart = await chrome.tabs.sendMessage(tab.id, { type: "extractCart" });
+    } catch {
+      cart = null;
+    }
+  }
+  if (cart && cart.isCart && cart.items.length > 0) {
+    describeCart(cart);
+    if (test && test.ok) {
+      addButton("Registrar agora", async () => {
+        const r = await chrome.tabs.sendMessage(tab.id, { type: "captureNow" });
+        $("message").textContent =
+          r && r.ok ? "Enviado. Veja o resumo na página." : "Não foi possível registrar.";
+      });
+    }
+  } else if (!data || !data.asin || !data.isProductPage) {
     $("page").innerHTML =
       '<p class="muted">Abra a página de um produto na Amazon Brasil para registrar o preço.</p>';
   } else if (test && test.ok) {

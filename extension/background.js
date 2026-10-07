@@ -64,6 +64,16 @@ async function handle(message, sender) {
       if (tabId !== undefined) lastResultByTab.set(tabId, { at: Date.now(), result });
       return result;
     }
+    case "captureBatch":
+      return api("/api/extension/captures/batch", {
+        method: "POST",
+        body: JSON.stringify(message.payload),
+      });
+    case "monitorBatch":
+      return api("/api/extension/products/batch", {
+        method: "POST",
+        body: JSON.stringify({ items: message.items }),
+      });
     case "undo":
       return api(`/api/extension/captures/${encodeURIComponent(message.observationId)}/undo`, {
         method: "POST",

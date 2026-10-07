@@ -24,6 +24,7 @@ export function DateOnly({ date }: { date: Date | null | undefined }) {
 
 export const SOURCE_LABELS: Record<string, string> = {
   extension: "extensão",
+  cart: "carrinho",
   manual: "manual",
   mock: "simulado",
 };

@@ -62,3 +62,56 @@ export const extensionMonitorSchema = z.object({
   title: z.string().trim().min(1).max(500),
   pageUrl: z.string().url().max(2000).nullish(),
 });
+
+const asinField = z
+  .string()
+  .transform((s) => s.trim().toUpperCase())
+  .refine(isValidAsin, "ASIN inválido");
+
+/** Um item lido de uma página com vários produtos (carrinho). */
+export const batchItemSchema = z
+  .object({
+    asin: asinField,
+    title: text(500),
+    section: z.enum(["active", "saved"]).nullish(),
+    status: z.enum(["OK", "UNAVAILABLE"]),
+    priceCents: cents.nullable(),
+    pixPriceCents: cents.nullish(),
+    listPriceCents: cents.nullish(),
+    primeExclusive: z.boolean().nullish(),
+    sellerName: text(200),
+    availability: text(300),
+    diagnostics: z.record(z.string(), z.unknown()).nullish(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.status === "OK" && value.priceCents === null) {
+      ctx.addIssue({ code: "custom", path: ["priceCents"], message: "Status OK exige preço." });
+    }
+    if (value.status === "UNAVAILABLE" && value.priceCents !== null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["priceCents"],
+        message: "Indisponível não pode ter preço.",
+      });
+    }
+  });
+
+export type BatchItem = z.infer<typeof batchItemSchema>;
+
+/** Lote enviado pela extensão ao abrir o carrinho. */
+export const extensionBatchSchema = z.object({
+  kind: z.literal("cart"),
+  pageUrl: z.string().url().max(2000).nullish(),
+  /** Itens que a extensão viu mas não conseguiu ler com segurança (não são enviados). */
+  unreadable: z.number().int().min(0).max(1000).default(0),
+  force: z.boolean().optional(),
+  items: z.array(batchItemSchema).max(500),
+});
+
+/** "Monitorar todos" a partir do carrinho. */
+export const extensionMonitorBatchSchema = z.object({
+  items: z
+    .array(z.object({ asin: asinField, title: z.string().trim().min(1).max(500) }))
+    .min(1)
+    .max(500),
+});
