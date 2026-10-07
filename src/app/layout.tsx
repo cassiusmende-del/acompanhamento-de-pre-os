@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { RefreshOnFocus } from "@/components/RefreshOnFocus";
 import { APP_VERSION, APP_VERSION_LABEL } from "@/version";
 import "./globals.css";
 
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             </nav>
           </div>
         </header>
+        <RefreshOnFocus />
         <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
         <footer className="mx-auto max-w-5xl px-4 pb-6 text-xs text-muted">
           versão {APP_VERSION} · {APP_VERSION_LABEL}
